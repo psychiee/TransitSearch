@@ -19,18 +19,13 @@
 ; plot transit target altitude
 '''
 import time
-import numpy as np
-from glob import glob
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
 import matplotlib.backends.backend_tkagg as tkagg
 from tkinter import *
 from tslib import *
 
-dtor = np.pi/180.0000
-
 data = 1000
-path ='./plots/'
 
 class TransitSearch(Frame):
     
@@ -73,33 +68,39 @@ class TransitSearch(Frame):
 
         w = OptionMenu(f0, self.OptObs, *self.obslist)
         w.grid(row=1,column=1,sticky=W,padx=5,pady=5)
+        w.config(font='Verdana 12 bold')
         self.OptObs.set(self.obslist[1])
         
         self.lon, self.lat = StringVar(), StringVar()
-        Label(f0,text='Longitude').grid(row=1, column=2)
-        Entry(f0,width=15, textvariable=self.lon).grid(row=1, column=3)
-        Label(f0,text='Latitude').grid(row=1, column=4)
-        Entry(f0,width=15, textvariable=self.lat).grid(row=1, column=5)
+        Label(f0,font='Verdana 12', text='Longitude').grid(row=1, column=2)
+        Entry(f0,width=10, font='Verdana 12', textvariable=self.lon).grid(row=1, column=3)
+        Label(f0,font='Verdana 12', text='Latitude').grid(row=1, column=4)
+        Entry(f0,width=10, font='Verdana 12', textvariable=self.lat).grid(row=1, column=5)
 
         ptime = time.localtime()
         self.OptDate = StringVar()
         self.OptDate.set('%4d/%02d/%02d' % (ptime[0],ptime[1],ptime[2]))
-        
-        Entry(f0,width=10,textvariable=self.OptDate).grid(row=1,column=6,sticky=W,padx=5,pady=5)
-        Frame(f0).grid(row=1,column=7)                                    
-        Button(f0, text="Draw", width=15, command=self.Draw).grid(row=1,column=8,sticky=E,padx=5,pady=5)
+
+        Label(f0, font='Verdana 12', text='Date').grid(row=1, column=6)
+        en = Entry(f0, width=10, font='Verdana 14 bold', textvariable=self.OptDate)
+        en.grid(row=1,column=7, sticky=W,padx=5,pady=5)
+        en.bind('<Return>', self.DrawEnter)
+        #Frame(f0).grid(row=1, column=8)
+        Button(f0, text="Draw", font='Verdana 12 bold', width=15, command=self.Draw).grid(row=1,column=9,sticky=E,padx=5,pady=5)
         
         # embed the plot figure
         f2 = LabelFrame(master, text="Plot", padx=5, pady=5) 
-        self.fig = plt.figure(1,figsize=(10,7))
+        self.fig = plt.figure(1,figsize=(10,8))
         self.fig.clf()
         self.canvas = tkagg.FigureCanvasTkAgg(self.fig, master=f2)
         self.canvas.get_tk_widget().pack(fill=BOTH)
         
         #implement GUI controls 
         f0.pack(fill=BOTH)
-        #f1.pack(fill=BOTH)
         f2.pack(fill=BOTH)
+
+    def DrawEnter(self, event):
+        self.Draw()
 
     def Draw(self):
 
