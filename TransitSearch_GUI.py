@@ -28,8 +28,8 @@ import matplotlib.backends.backend_qt5agg as qtagg
 from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QLineEdit, \
     QWidget, QMessageBox, QVBoxLayout, QHBoxLayout, QComboBox, QGroupBox, \
     QPushButton
-from PyQt5.QtGui import QFont, QColor
-from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QFont, QColor, QPainter, QPolygon, QPicture
+from PyQt5.QtCore import Qt, QPoint, QRectF
 
 class TransitSearch(QMainWindow):
     
@@ -61,12 +61,11 @@ class TransitSearch(QMainWindow):
         qf_small = QFont('Verdana', 10)
         qf = QFont('Verdana', 12)
         qf_bold = QFont('Verdana', 13, QFont.Bold)
-        cnames = [z for z in QColor.colorNames()]
-        cnames.remove('white')
         self.colors = []
-        for z in cnames:
+        for z in QColor.colorNames():
             t = QColor(z).getRgb()
-            self.colors.append((t[0], t[1], t[2], 180))
+            if sum(t) > 650: continue
+            self.colors.append(list(t[0:3]))
 
         # MAIN widgets
         self.setWindowTitle('Transit Search 0.90')
@@ -224,6 +223,7 @@ class TransitSearch(QMainWindow):
         mg = self.mainGraph
         mg.clear()
 
+
         # set of vertical plot position of transit timing
         y2 = 5
         lyy = np.zeros([NPTS])
@@ -246,14 +246,14 @@ class TransitSearch(QMainWindow):
             tcen = int(tdur.mean())
             # define unique color of each planet
             pcolor = self.colors[pidx % len(self.colors)]
-            ppen1 = pg.mkPen(pcolor, width=2, alpha=0.1)
-            ppen3 = pg.mkPen(pcolor, width=15, alpha=0.2)
+            ppen2 = pg.mkPen(pcolor+[150,], width=2)
+            ppen15 = pg.mkPen(pcolor+[150,], width=15)
             pf = QFont('Verdana', 9)
             pf_small = QFont('Verdana', 7)
             # draw line and transit time and labels 
-            mg.plot(lday, lyy+y2, pen=ppen1)
+            mg.plot([lday[0], lday[-1]], [y2, y2], pen=ppen2)
             # draw the transit timing including the errors of pericenter, period
-            mg.plot(lday[tall], lyy[tall] + y2, pen=ppen3)
+            mg.plot(lday[tall], lyy[tall] + y2, pen=ppen15)
 
             t1 = pg.TextItem(pname[pidx], color=pcolor)
             t1.setFont(pf)
@@ -268,71 +268,42 @@ class TransitSearch(QMainWindow):
             '''
             # add ttick position 
             ytickv.append(y2+3)
-            '''
+
             # draw the duration-based transit timing 
             oalt = np.where(starAlt > 0)[0]
-            pys = np.r_[lyy[oalt]+y2+starAlt[oalt]/9,\
-                        lyy[oalt[::-1]]+y2]
-            pxs = np.r_[lday[oalt],lday[oalt[::-1]]]
+            #pys = np.r_[lyy[oalt]+y2+starAlt[oalt]/9, lyy[oalt[::-1]]+y2]
+            #pxs = np.r_[lday[oalt], lday[oalt[::-1]]]
+            pxs = lday[oalt]
+            pys = y2 + starAlt[oalt]/9
+            mg.plot(pxs, pys, fillLevel=y2, brush=pcolor+[80,])
+            '''
             xypair = list(zip(pxs,pys))
-            p = Polygon(xypair,closed=True,fill=True,color=pcolor,alpha=0.2)
+            #p = Polygon(xypair,closed=True,fill=True,color=pcolor,alpha=0.2)
             ax2.add_patch(p)
             # draw the mid-transit 
             ax2.plot(lday[tcen],lyy[tcen]+y2, 'o', color=pcolor, ms=12, alpha=0.5)
-            '''
             print (pname[pidx], int(starAlt[tcen]), sVs[pidx])
+            '''
             # to the next row 
             y2 = y2 + 10
             
         # check the available stars 
         if y2 == 5:
-            #ax1.cla()
             mg.text('No Available Targets')
-            #mg.canvas.draw()
             return
+        mg.plot([sunsetLST, sunsetLST+18/15],[y2+10, y2+10],
+                fillLevel=0, brush=[0, 0, 0, 20])
+        mg.plot([sunriseLST+24, sunriseLST + 24 + 18 / 15], [y2 + 10, y2 + 10],
+                fillLevel=0, brush=[0, 0, 0, 20])
+        '''
         mg.plot([sunsetLST, sunsetLST], [0, y2 + 10])
         mg.plot([sunsetLST + 18 / 15., sunsetLST + 18 / 15.], [0, y2 + 10])
         mg.plot([sunriseLST+ 24 , sunriseLST+ 24], [0, y2 + 10])
         mg.plot([sunriseLST + 24 + 18 / 15., sunriseLST + 24 + 18 / 15.], [0, y2 + 10])
-
-        '''  
-        # draw the sunset/rise line in plot 
-        ax2.plot([sunsetLST,sunsetLST],[0,y2+10], 'k-', lw=1)
-        ax2.text(sunsetLST-0.27,(y2+10)*0.1,'Sunset', rotation='vertical', fontsize=12)
-        ax2.plot([sunsetLST+18/15.,sunsetLST+18/15.],[0,y2+10], 'k-', lw=1) 
-        ax2.text(sunsetLST-0.27+18/15.,(y2+10)*0.1, 'Evening Astronomical Twilight',
-                 rotation='vertical', fontsize=12)
-        ax2.plot([sunriseLST+24-18/15.,sunriseLST+24-18/15.],[0,y2+10], 'k-', lw=1) 
-        ax2.text(sunriseLST+24+0.1-18/15.,(y2+10)*0.1, 'Morning Astronomical Twilight',
-                 rotation='vertical', fontsize=12)
-        ax2.plot([sunriseLST+24,sunriseLST+24],[0,y2+10], 'k-', lw=1)
-        ax2.text(sunriseLST+24+0.1,(y2+10)*0.1,'Sunrise', rotation='vertical', fontsize=12)
-    
-        # draw the title     
-        #ax2.text(0.04,0.92,'DATE: %s %02d %04d' % (month, dd, yy),fontsize=34,transform=f2.transFigure)
-        #ax2.text(0.97,0.94,'SITE: %s' % (self.obs,),fontsize=30,ha='right',transform=f2.transFigure) 
-        #ax2.text(0.97,0.88,'LON =%7.2f , LAT =%6.2f' % (self.lam,self.chi),ha='right',fontsize=24,transform=f2.transFigure)
-        ax2.set_xlim([sunsetLST-1,sunriseLST+25])
-        ax2.set_ylim([0, y2])
-        ax2.set_xlabel('Local Standard Time [h]', fontsize=20)
-        # read and redraw the x-labels 
-        f2.canvas.draw()
-        labels = [item.get_text() for item in ax2.get_xticklabels()]
-        for i, x in enumerate(labels):
-            try: 
-                x = int(x)
-                if x > 24: labels[i] = '%02d' % (x-24,)
-            except: pass 
-        
-        ax2.set_xticklabels(labels)
-        ax2.set_yticks(ytickv)
-        ax2.set_yticklabels([''])
-        ax2.grid()
-        f2.canvas.draw()        
         '''
         xticks = [(k, '%02i' % (k % 24)) for k in range(12,36)]
-
         mg.getAxis('bottom').setTicks([xticks])
+        mg.getAxis('left').setTicks([])
         mg.getPlotItem().showGrid(alpha=0.5)
         mg.setXRange(12, 36)
         mg.setYRange(0, y2)
