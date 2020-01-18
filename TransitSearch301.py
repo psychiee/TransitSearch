@@ -56,7 +56,7 @@ with open('targetdate.txt','r') as f:
             idd.append(tmp[2].strip())
 
 # Database of Observatory Location =============================================
-odat = np.genfromtxt('obsdb.dat',dtype=None, \
+odat = np.genfromtxt('observatory.dat',dtype=None, \
        names=['obsdb','chidb','lambdadb','gmtdb'], delimiter=',') 
 obsdb = [str(x,'utf-8') for x in odat['obsdb']]
 chidb = [float(x) for x in odat['chidb']] #odat['chidb']

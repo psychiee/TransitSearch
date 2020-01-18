@@ -16,6 +16,7 @@ def readData1():
     '''
     flist = glob('exoplanets.*.csv')
     flist.sort()
+
     dat = np.genfromtxt(flist[-1], names=True, dtype=None, delimiter=',')
     dat = dat[1:]  # skip header
     vv = np.where((dat['PER'] > 0) & (dat['T14'] > 0) & (dat['TT'] > 0))[0]
@@ -41,8 +42,9 @@ def readData2():
 	Using database of ETD sites (http://var2.astro.cz/ETD/)
 
     '''
-    flist = glob('exolist-*.txt')
+    flist = glob('transit-*.dat')
     flist.sort()
+
     dat1 = np.genfromtxt(flist[-1], usecols=(0,), dtype='U')
     dat2 = np.genfromtxt(flist[-1], usecols=(1, 2, 3, 4, 5, 6, 7))
 

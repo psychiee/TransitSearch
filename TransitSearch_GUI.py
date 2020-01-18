@@ -18,153 +18,164 @@
 ; read transit time table
 ; plot transit target altitude
 '''
-import time
+import sys, time
 from glob import glob
+from tslib import *
+import pyqtgraph as pg
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
-import matplotlib.backends.backend_tkagg as tkagg
-import tkinter as tk
-from tslib import *
+import matplotlib.backends.backend_qt5agg as qtagg
+from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QLineEdit, \
+    QWidget, QMessageBox, QVBoxLayout, QHBoxLayout, QComboBox, QGroupBox, \
+    QPushButton
+from PyQt5.QtGui import QFont, QColor
+from PyQt5.QtCore import Qt
 
-data = 1000
-
-class TransitSearch(tk.Frame):
+class TransitSearch(QMainWindow):
     
-    def __init__(self, master):
-        try:
-            odat = np.genfromtxt('observatory.dat', dtype=None,
-                   names=['obsdb','chidb','lambdadb','gmtdb'], delimiter=',')
-        except Exception as e:
-            emsg = 'Error in reading observatory DB file(observatory.dat) \n\n '
-            for i, z in enumerate(e.args):
-                emsg += '(%i) %s \n' % (i + 1, z)
-            tk.messagebox.showerror('Error', emsg)
-            raise
+    def __init__(self):
+        super().__init__()
 
-
-        self.obsdb = np.array(odat['obsdb'], dtype='unicode')
-        self.chidb = odat['chidb']
-        self.lambdadb = odat['lambdadb']
-        self.gmtdb = odat['gmtdb']
-
-        # define month name
-        self.monthdb = ['Jan.', 'Feb.', 'Mar.', 'Apr.', 'May', 'Jun.',
-                        'Jul.', 'Aug.', 'Sep.', 'Oct.', 'Nov.', 'Dec.']
-
-        # define colors =====================================================================
-        self.colors = \
-        [u'indigo', u'firebrick', u'indianred', u'darkolivegreen', u'olive', u'tomato',
-         u'orangered', u'darkslategrey', u'dimgray', u'black', u'orange', u'darkslategray', 
-         u'brown', u'dodgerblue', u'chocolate', u'crimson', u'forestgreen', u'gray', 
-         u'darkturquoise', u'goldenrod', u'darkgreen', u'darkviolet',  u'saddlebrown', 
-         u'grey', u'darkslateblue', u'mediumvioletred', u'red', u'deeppink', u'limegreen', 
-         u'darkmagenta', u'darkgoldenrod', u'maroon', u'yellowgreen', u'navy', u'olivedrab', 
-         u'blue', u'slateblue', u'darkblue', u'seagreen', u'sienna', u'mediumblue', 
-         u'royalblue', u'green', u'midnightblue', u'darkcyan', u'teal', u'darkorchid', 
-         u'deepskyblue', u'rebeccapurple', u'darkred', u'steelblue',  u'mediumseagreen', 
-         u'cadetblue', u'purple', u'darkorange', u'blueviolet']
-        
-        # read transit database 
+        # Check & Read transit database =======================================
         try:
             self.params = readData2()
         except Exception as e:
             emsg = 'Error in reading transit DB file(transit-YYMMDD.dat)\n\n'
             for i, z in enumerate(e.args):
                 emsg += '(%i) %s \n' % (i + 1, z)
-            tk.messagebox.showerror('Error', emsg)
+            QMessageBox(QMessageBox.Critical, 'Error', emsg)
+            raise
+        # Check & Read Observatory data ========================================
+        try:
+            self.obsdb = np.genfromtxt('observatory.dat', dtype='U', usecols=(0,), delimiter=',')
+            odat = np.genfromtxt('observatory.dat', usecols=(1,2,3), delimiter=',')
+            self.chidb, self.lambdadb , self.gmtdb = odat[:,0], odat[:,1], odat[:,2]
+        except Exception as e:
+            emsg = 'Error in reading observatory DB file(observatory.dat) \n\n '
+            for i, z in enumerate(e.args):
+                emsg += '(%i) %s \n' % (i + 1, z)
+            QMessageBox(QMessageBox.Critical, 'Error', emsg)
             raise
 
-        #GUI design
-        tk.Frame.__init__(self, master)
-        master.title("Transit Search 0.9")
-        
-        f0 = tk.LabelFrame(master, text="Location", padx=5, pady=5)
-        # option menu - observatory list 
-        self.obslist = ['Location'] + list(self.obsdb)
-        self.OptObs = tk.StringVar()
+        # GUI design
+        qf_small = QFont('Verdana', 10)
+        qf = QFont('Verdana', 12)
+        qf_bold = QFont('Verdana', 13, QFont.Bold)
+        cnames = [z for z in QColor.colorNames()]
+        cnames.remove('white')
+        self.colors = []
+        for z in cnames:
+            t = QColor(z).getRgb()
+            self.colors.append((t[0], t[1], t[2], 180))
 
-        w = tk.OptionMenu(f0, self.OptObs, *self.obslist)
-        w.grid(row=1,column=1,sticky=tk.W,padx=5,pady=5)
-        w.config(font='Verdana 12 bold')
-        self.OptObs.set(self.obslist[1])
-        
-        self.lon, self.lat = tk.StringVar(), tk.StringVar()
-        tk.Label(f0,font='Verdana 12', text='Longitude').grid(row=1, column=2)
-        tk.Entry(f0,width=10, font='Verdana 12', textvariable=self.lon).grid(row=1, column=3)
-        tk.Label(f0,font='Verdana 12', text='Latitude').grid(row=1, column=4)
-        tk.Entry(f0,width=10, font='Verdana 12', textvariable=self.lat).grid(row=1, column=5)
+        # MAIN widgets
+        self.setWindowTitle('Transit Search 0.90')
+        self._centralWidget = QWidget(self)
+        self.setCentralWidget(self._centralWidget)
+        self.mainLayout = QVBoxLayout()
 
+        # TOP Widgets
+        topLayout = QHBoxLayout()
+        # - - Combobox of Observatory
+        self.obsList = QComboBox(font=qf_small)
+        self.obsList.addItem('User Location')
+        for z in self.obsdb:
+            self.obsList.addItem(z)
+        self.obsList.setFixedHeight(35)
+        self.obsList.currentIndexChanged.connect(self.ChangeObs)
+
+        # - - LineEdit of LAT, LON
+
+        self.latText = QLineEdit('', font=qf, alignment=Qt.AlignRight)
+        self.latText.setFixedSize(80, 30)
+        self.latText.setReadOnly(True)
+        self.lonText = QLineEdit('', font=qf, alignment=Qt.AlignRight)
+        self.lonText.setFixedSize(80, 30)
+        self.lonText.setReadOnly(True)
+        self.tzText = QLineEdit('', font=qf, alignment=Qt.AlignRight)
+        self.tzText.setFixedSize(40, 30)
+        self.tzText.setReadOnly(True)
+
+        # - - LineEdit of DATE
         ptime = time.localtime()
-        self.OptDate = tk.StringVar()
-        self.OptDate.set('%4d/%02d/%02d' % (ptime[0],ptime[1],ptime[2]))
+        self.dateText = QLineEdit('%4d/%02d/%02d' % (ptime[0], ptime[1], ptime[2]), font=qf_bold)
+        self.dateText.setFixedSize(140, 30)
+        self.dateText.returnPressed.connect(self.DrawEnter)
+        # - - Button of DRAW
+        self.drawButton = QPushButton('DRAW')
+        self.drawButton.setFixedSize(120, 30)
+        self.drawButton.setFont(qf_bold)
+        self.drawButton.clicked.connect(self.Draw)
 
-        tk.Label(f0, font='Verdana 12', text='Date').grid(row=1, column=6)
-        en = tk.Entry(f0, width=10, font='Verdana 14 bold', textvariable=self.OptDate)
-        en.grid(row=1,column=7, sticky=tk.W,padx=5,pady=5)
-        en.bind('<Return>', self.DrawEnter)
-        #Frame(f0).grid(row=1, column=8)
-        tk.Button(f0, text="Draw", font='Verdana 12 bold', width=15, command=self.Draw).grid(row=1,column=9,sticky=tk.E,padx=5,pady=5)
-        
-        # embed the plot figure
-        f2 = tk.LabelFrame(master, text="Plot", padx=5, pady=5)
-        self.fig = plt.figure(1,figsize=(10,8))
-        self.fig.clf()
-        self.canvas = tkagg.FigureCanvasTkAgg(self.fig, master=f2)
-        self.canvas.get_tk_widget().pack(fill=tk.BOTH)
-        
-        #implement GUI controls 
-        f0.pack(fill=tk.BOTH)
-        f2.pack(fill=tk.BOTH)
+        # TOP Layouts
+        topLayout.addWidget(self.obsList)
+        topLayout.addWidget(QLabel("Latitude",font=qf_small,width=30))
+        topLayout.addWidget(self.latText)
+        topLayout.addWidget(QLabel("Longitude", font=qf_small, width=30))
+        topLayout.addWidget(self.lonText)
+        topLayout.addWidget(QLabel("Timezone", font=qf_small, width=30))
+        topLayout.addWidget(self.tzText)
+        topLayout.addWidget(QLabel("Date", font=qf_small, width=30))
+        topLayout.addWidget(self.dateText)
+        topLayout.addWidget(self.drawButton)
 
-    def DrawEnter(self, event):
+        self.mainGraph = pg.PlotWidget()
+        self.mainGraph.setBackground('w')
+        self.mainLayout.addLayout(topLayout)
+        self.mainLayout.addWidget(self.mainGraph)
+
+        self.obsList.setCurrentIndex(1)
+        self._centralWidget.setLayout(self.mainLayout)
+
+    def ChangeObs(self, i):
+        if i == 0:
+            self.latText.setReadOnly(False)
+            self.lonText.setReadOnly(False)
+        else:
+            self.latText.setText('%.3f' % (self.chidb[i-1]))
+            self.lonText.setText('%.3f' % (self.lambdadb[i-1]))
+            self.tzText.setText('%.1f' % (self.gmtdb[i-1]))
+            self.latText.setReadOnly(True)
+            self.lonText.setReadOnly(True)
+
+    def DrawEnter(self):
         self.Draw()
 
     def Draw(self):
 
         # set location 
-        obsid = self.obslist.index(self.OptObs.get())
-        print (obsid, self.OptObs.get())
-        if obsid == 0:
-            self.chi= np.float64(self.lat.get()) # Latitude of Observation
-            self.lam= np.float64(self.lon.get()) # Longitude of Observation
-            #if (lambdad < 0) | (lambdam < 0) | (lambdas < 0): self.lam=-self.lam
-            #self.obs='LAT.='+'%3d' % (chid,)+'d '+'%2d' % (chim,)+'m '+ \
-            #    '%2d' % (chis,)+'s   LONG.='+'%4d' % (lambdad,)+'d '+ \
-            #    '%2d' % (lambdam,)+'m '+'%2d' % (lambdas,)+'s'
-            self.obs = 'LAT= %.2f LON=%.2f' % (self.chi, self.lam)
-            self.timezone=int(self.lam/15)+1 # Time difference between Local Standard Time and Universal Time
-        else:
-            self.chi=self.chidb[obsid-1]
-            self.lat.set(self.chi)
-            self.lam=self.lambdadb[obsid-1]
-            self.lon.set(self.lam)
-            self.obs=self.obsdb[obsid-1] # Observatory Name
-            self.timezone = self.gmtdb[obsid-1]
-        if (self.lam < 0): self.lam=360+self.lam     
+        self.chi = np.float64(self.latText.text()) # Latitude of Observation
+        self.lam = np.float64(self.lonText.text()) # Longitude of Observation
+        self.timezone = np.float64(self.tzText.text())
+        self.obs = 'LAT= %.2f LON=%.2f' % (self.chi, self.lam)
+
+        obsid = self.obsList.currentIndex()
+
         try:
-            tmp = self.OptDate.get().split('/')  
+            tmp = self.dateText.text().split('/')
         except:
             ptime = time.localtime()
             self.OptDate.set('%4d/%02d/%02d' % (ptime[0],ptime[1],ptime[2]))
-            tmp = self.OptDate.get().split('/')              
+            tmp = self.OptDate.get().split('/')
+
         yy = int(tmp[0])
         mm = int(tmp[1])
         dd = int(tmp[2])
                               
         #targetlist_name = '%04d%02d%02d' % (yy,mm,dd)
-        month=self.monthdb[mm-1]  # Month
-        
-        lday=(np.arange(data, dtype=np.float64)/data)*24.+12. #; Local Standard Time
+        #month=self.monthdb[mm-1]  # Month
+        NPTS = 1000
+        lday=(np.arange(NPTS, dtype=np.float64)/NPTS)*24.+12. #; Local Standard Time
         
         # calc. Julian Date
         # for yy, mm, dd - local time / convert into UT by (-timezone)
-        JD12 =JulDate(yy,mm,dd)# ,12-self.timezone,0,0)
+        JD12 = JulDate(yy,mm,dd)# ,12-self.timezone,0,0)
         JD = JD12 - 0.5 # JD at UT=0 in the day 
         # make the array of JD for the day (in Local Standard Time) 
         # LST 0h in the day = (JD-timezone)
         # LST 12h in the day = (JD-timezone) + 0.5 
-        JDoneday= (JD - float(self.timezone)/24.0) + 0.5 + np.arange(data, dtype=np.float64)/data 
-            
+        JDoneday= (JD - float(self.timezone)/24.0) + 0.5 + np.arange(NPTS, dtype=np.float64)/NPTS
+
         # calc. Sun RA, Dec     
         rasun, decsun = SunRADec(JD)
         rasun = np.mod(rasun, 360) / 15.0   
@@ -206,17 +217,16 @@ class TransitSearch(tk.Frame):
         JD_err1 = - N_revol * pperlower # err2 is negative 
         JD_err2 = N_revol * pperupper # err1 is positive
         
-        oklist = np.where((JD_recent2 < sunrisejd) & (JD_recent1 > sunsetjd) & \
+        oklist = np.where((JD_recent2 < sunrisejd) & (JD_recent1 > sunsetjd) &
                           (pdepth > 0.005) & (sVs < 20))[0]
 
         # draw two figure frames 
-        f2 = self.fig 
-        ax2 = f2.add_axes([0.17,0.1,0.75,0.86])
-        ax2.cla()
+        mg = self.mainGraph
+        mg.clear()
 
-        # set of vertical plot position of transit timing 
+        # set of vertical plot position of transit timing
         y2 = 5
-        lyy = np.zeros([data])
+        lyy = np.zeros([NPTS])
         ytickv = []
         for pidx in oklist: # = 0, pnum-1 DO BEGIN
             # read star RA, Dec
@@ -236,19 +246,29 @@ class TransitSearch(tk.Frame):
             tcen = int(tdur.mean())
             # define unique color of each planet
             pcolor = self.colors[pidx % len(self.colors)]
+            ppen1 = pg.mkPen(pcolor, width=2, alpha=0.1)
+            ppen3 = pg.mkPen(pcolor, width=15, alpha=0.2)
+            pf = QFont('Verdana', 9)
+            pf_small = QFont('Verdana', 7)
             # draw line and transit time and labels 
-            ax2.plot(lday,lyy+y2, '-', color=pcolor, lw=2, alpha=0.5) 
-            ax2.text(sunsetLST-(sunriseLST-sunsetLST+26)*0.25, y2,
-                     pname[pidx],color=pcolor, fontsize=12, )
-            ax2.text(sunsetLST-(sunriseLST-sunsetLST+26)*0.27, y2+4,
-                     '%5.2f' % (sVs[pidx],),color=pcolor, fontsize=10)
-            ax2.text(sunriseLST+24+(sunriseLST-sunsetLST+26)*0.08, y2,
-                     '%5.2f%%' % (pdepth[pidx]*100,), color=pcolor, fontsize=10)
+            mg.plot(lday, lyy+y2, pen=ppen1)
+            # draw the transit timing including the errors of pericenter, period
+            mg.plot(lday[tall], lyy[tall] + y2, pen=ppen3)
+
+            t1 = pg.TextItem(pname[pidx], color=pcolor)
+            t1.setFont(pf)
+            t1.setPos(sunsetLST-(sunriseLST-sunsetLST+26)*0.27, y2+4)
+
+            mg.addItem(t1)
+            '''
+            mg.text('%5.2f' % (sVs[pidx],), anchor=(sunsetLST-(sunriseLST-sunsetLST+26)*0.27, y2+4),
+                     color=pcolor, font=pf_small)
+            mg.text('%5.2f%%' % (pdepth[pidx]*100,), anchor=(sunriseLST+24+(sunriseLST-sunsetLST+26)*0.08, y2),
+                     color=pcolor, font=pf_small)
+            '''
             # add ttick position 
             ytickv.append(y2+3)
-            # draw the transit timing including the errors of pericenter, period
-            ax2.plot(lday[tall],lyy[tall]+y2, color=pcolor, lw=7, alpha=0.5)
-            
+            '''
             # draw the duration-based transit timing 
             oalt = np.where(starAlt > 0)[0]
             pys = np.r_[lyy[oalt]+y2+starAlt[oalt]/9,\
@@ -259,7 +279,7 @@ class TransitSearch(tk.Frame):
             ax2.add_patch(p)
             # draw the mid-transit 
             ax2.plot(lday[tcen],lyy[tcen]+y2, 'o', color=pcolor, ms=12, alpha=0.5)
-    
+            '''
             print (pname[pidx], int(starAlt[tcen]), sVs[pidx])
             # to the next row 
             y2 = y2 + 10
@@ -267,11 +287,15 @@ class TransitSearch(tk.Frame):
         # check the available stars 
         if y2 == 5:
             #ax1.cla()
-            ax2.text(0.5, 0.3, 'No Available Targets',
-                     fontsize=25, alpha=0.6, transform=ax2.transAxes)
-            f2.canvas.draw() 
+            mg.text('No Available Targets')
+            #mg.canvas.draw()
             return
-          
+        mg.plot([sunsetLST, sunsetLST], [0, y2 + 10])
+        mg.plot([sunsetLST + 18 / 15., sunsetLST + 18 / 15.], [0, y2 + 10])
+        mg.plot([sunriseLST+ 24 , sunriseLST+ 24], [0, y2 + 10])
+        mg.plot([sunriseLST + 24 + 18 / 15., sunriseLST + 24 + 18 / 15.], [0, y2 + 10])
+
+        '''  
         # draw the sunset/rise line in plot 
         ax2.plot([sunsetLST,sunsetLST],[0,y2+10], 'k-', lw=1)
         ax2.text(sunsetLST-0.27,(y2+10)*0.1,'Sunset', rotation='vertical', fontsize=12)
@@ -298,18 +322,25 @@ class TransitSearch(tk.Frame):
             try: 
                 x = int(x)
                 if x > 24: labels[i] = '%02d' % (x-24,)
-            except: pass          
+            except: pass 
+        
         ax2.set_xticklabels(labels)
         ax2.set_yticks(ytickv)
         ax2.set_yticklabels([''])
         ax2.grid()
         f2.canvas.draw()        
+        '''
+        xticks = [(k, '%02i' % (k % 24)) for k in range(12,36)]
 
-    
+        mg.getAxis('bottom').setTicks([xticks])
+        mg.getPlotItem().showGrid(alpha=0.5)
+        mg.setXRange(12, 36)
+        mg.setYRange(0, y2)
+
 if __name__ == "__main__":
-
-    root = tk.Tk()
-    ap = TransitSearch(master=root)
-    ap.mainloop()
-
+    app = QApplication(sys.argv)
+    app.setStyle('Breeze')
+    view = TransitSearch()
+    view.show()
+    sys.exit(app.exec_())
 
