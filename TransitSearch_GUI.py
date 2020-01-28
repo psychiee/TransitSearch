@@ -18,18 +18,18 @@
 ; read transit time table
 ; plot transit target altitude
 '''
-import sys, time
-from glob import glob
+import sys
+import time
+#from glob import glob
 from tslib import *
-import pyqtgraph as pg
+#import pyqtgraph as pg
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
-import matplotlib.backends.backend_qt5agg as qtagg
+import matplotlib.backends.backend_qt5agg as qt5agg
 from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QLineEdit, \
-    QWidget, QMessageBox, QVBoxLayout, QHBoxLayout, QComboBox, QGroupBox, \
-    QPushButton
-from PyQt5.QtGui import QFont, QColor, QPainter, QPolygon, QPicture
-from PyQt5.QtCore import Qt, QPoint, QRectF
+    QWidget, QMessageBox, QVBoxLayout, QHBoxLayout, QComboBox, QPushButton
+from PyQt5.QtGui import QFont, QColor
+from PyQt5.QtCore import Qt
 
 class TransitSearch(QMainWindow):
     
@@ -61,11 +61,18 @@ class TransitSearch(QMainWindow):
         qf_small = QFont('Verdana', 10)
         qf = QFont('Verdana', 12)
         qf_bold = QFont('Verdana', 13, QFont.Bold)
-        self.colors = []
-        for z in QColor.colorNames():
-            t = QColor(z).getRgb()
-            if sum(t) > 650: continue
-            self.colors.append(list(t[0:3]))
+        # define colors =====================================================================
+        self.colors = \
+        [u'indigo', u'firebrick', u'indianred', u'darkolivegreen', u'olive', u'tomato',
+         u'orangered', u'darkslategrey', u'dimgray', u'black', u'orange', u'darkslategray',
+         u'brown', u'dodgerblue', u'chocolate', u'crimson', u'forestgreen', u'gray',
+         u'darkturquoise', u'goldenrod', u'darkgreen', u'darkviolet',  u'saddlebrown',
+         u'grey', u'darkslateblue', u'mediumvioletred', u'red', u'deeppink', u'limegreen',
+         u'darkmagenta', u'darkgoldenrod', u'maroon', u'yellowgreen', u'navy', u'olivedrab',
+         u'blue', u'slateblue', u'darkblue', u'seagreen', u'sienna', u'mediumblue',
+         u'royalblue', u'green', u'midnightblue', u'darkcyan', u'teal', u'darkorchid',
+         u'deepskyblue', u'rebeccapurple', u'darkred', u'steelblue',  u'mediumseagreen',
+         u'cadetblue', u'purple', u'darkorange', u'blueviolet']
 
         # MAIN widgets
         self.setWindowTitle('Transit Search 0.90')
@@ -99,16 +106,16 @@ class TransitSearch(QMainWindow):
         ptime = time.localtime()
         self.dateText = QLineEdit('%4d/%02d/%02d' % (ptime[0], ptime[1], ptime[2]), font=qf_bold)
         self.dateText.setFixedSize(140, 30)
-        self.dateText.returnPressed.connect(self.DrawEnter)
+        self.dateText.returnPressed.connect(self.drawEnter)
         # - - Button of DRAW
         self.drawButton = QPushButton('DRAW')
         self.drawButton.setFixedSize(120, 30)
         self.drawButton.setFont(qf_bold)
-        self.drawButton.clicked.connect(self.Draw)
+        self.drawButton.clicked.connect(self.draw)
 
         # TOP Layouts
         topLayout.addWidget(self.obsList)
-        topLayout.addWidget(QLabel("Latitude",font=qf_small,width=30))
+        topLayout.addWidget(QLabel("Latitude", font=qf_small, width=30))
         topLayout.addWidget(self.latText)
         topLayout.addWidget(QLabel("Longitude", font=qf_small, width=30))
         topLayout.addWidget(self.lonText)
@@ -118,10 +125,12 @@ class TransitSearch(QMainWindow):
         topLayout.addWidget(self.dateText)
         topLayout.addWidget(self.drawButton)
 
-        self.mainGraph = pg.PlotWidget()
-        self.mainGraph.setBackground('w')
+        self.fig = plt.figure(1, figsize=(10, 7))
+        #self.fig.clf()
+        self.canvas = qt5agg.FigureCanvasQTAgg(self.fig)
+
         self.mainLayout.addLayout(topLayout)
-        self.mainLayout.addWidget(self.mainGraph)
+        self.mainLayout.addWidget(self.canvas)
 
         self.obsList.setCurrentIndex(1)
         self._centralWidget.setLayout(self.mainLayout)
@@ -137,10 +146,10 @@ class TransitSearch(QMainWindow):
             self.latText.setReadOnly(True)
             self.lonText.setReadOnly(True)
 
-    def DrawEnter(self):
+    def drawEnter(self):
         self.Draw()
 
-    def Draw(self):
+    def draw(self):
 
         # set location 
         self.chi = np.float64(self.latText.text()) # Latitude of Observation
@@ -164,32 +173,34 @@ class TransitSearch(QMainWindow):
         #targetlist_name = '%04d%02d%02d' % (yy,mm,dd)
         #month=self.monthdb[mm-1]  # Month
         NPTS = 1000
-        lday=(np.arange(NPTS, dtype=np.float64)/NPTS)*24.+12. #; Local Standard Time
-        
+        lday = (np.arange(NPTS)/NPTS)*24+12 #; Local Standard Time
+        lyy = np.zeros(NPTS)
+
         # calc. Julian Date
         # for yy, mm, dd - local time / convert into UT by (-timezone)
-        JD12 = JulDate(yy,mm,dd)# ,12-self.timezone,0,0)
+        JD12 = JulDate(yy, mm, dd)# ,12-self.timezone,0,0)
         JD = JD12 - 0.5 # JD at UT=0 in the day 
         # make the array of JD for the day (in Local Standard Time) 
         # LST 0h in the day = (JD-timezone)
         # LST 12h in the day = (JD-timezone) + 0.5 
-        JDoneday= (JD - float(self.timezone)/24.0) + 0.5 + np.arange(NPTS, dtype=np.float64)/NPTS
+        JDoneday = (JD - float(self.timezone)/24.0) + 0.5 + np.arange(NPTS)/NPTS
 
         # calc. Sun RA, Dec     
         rasun, decsun = SunRADec(JD)
         rasun = np.mod(rasun, 360) / 15.0   
         
         # calc. sun set/rise time  
-        sunriseUT, sunsetUT = SunRiSetUT(JD,self.lam,self.chi)
+        sunriseUT, sunsetUT = SunRiSetUT(JD, self.lam, self.chi)
         sunriseLST = (sunriseUT + self.timezone) % 24.0
+        sunriseLST = sunriseLST + 24
         sunsetLST = (sunsetUT + self.timezone) % 24.0
-        nosun, = np.where((lday >= sunsetLST) & (lday <= sunriseLST+24.0))
+        nosun = np.where((lday >= sunsetLST) & (lday <= sunriseLST))[0]
         sunsetjd = min(JDoneday[nosun])
         sunrisejd = max(JDoneday[nosun])
-        print ("[ %04d %02d %02d ]" % (yy, mm, dd))
-        print ("   JD = ", JD, " at UT=0")
-        print ("   SUNRA=", rasun, " hr, SUNDEC=", decsun, " deg")
-        print ("   SUNRise=", sunriseLST, " SUNSet=", sunsetLST)
+        print("[ %04d %02d %02d ]" % (yy, mm, dd))
+        print("   JD = ", JD, " at UT=0")
+        print("   SUNRA=", rasun, " hr, SUNDEC=", decsun, " deg")
+        print("   SUNRise=", sunriseLST, " SUNSet=", sunsetLST)
         
         # REFORM TRANSIT DATA ======================================================
         pname = self.params[0]
@@ -202,13 +213,9 @@ class TransitSearch(QMainWindow):
         sRAs = self.params[11]
         sDECs = self.params[12] 
         sVs = self.params[13]
-        
-        # total number of planets 
-        pnum = len(pname)
-        
+
         # CHECK AVAILABLE TRANSITS ======================================================
-        dJD = sunrisejd - sunsetjd 
-        # check whether the transit-mid time is in night-time 
+        # check whether the transit-mid time is in night-time
         N_revol = np.array((sunrisejd - ptt) / pper, np.int)
         JD_recent = N_revol * pper + ptt
         JD_recent1 = JD_recent - pt14/2.0
@@ -219,94 +226,100 @@ class TransitSearch(QMainWindow):
         oklist = np.where((JD_recent2 < sunrisejd) & (JD_recent1 > sunsetjd) &
                           (pdepth > 0.005) & (sVs < 20))[0]
 
-        # draw two figure frames 
-        mg = self.mainGraph
-        mg.clear()
-
+        # draw two figure frames
+        f2 = self.fig
+        ax2 = f2.add_axes([0.17, 0.1, 0.75, 0.86])
+        ax2.cla()
 
         # set of vertical plot position of transit timing
         y2 = 5
-        lyy = np.zeros([NPTS])
-        ytickv = []
-        for pidx in oklist: # = 0, pnum-1 DO BEGIN
+        ytickvalues = []
+        for pidx in oklist:  # = 0, pnum-1 DO BEGIN
             # read star RA, Dec
             starRA, starDec = sRAs[pidx], sDECs[pidx]
-        
+
             # check altitude of the star
             starAlt, starAzi = \
-                StarAltAzi(JDoneday,self.lam,self.chi,starRA,starDec)
-            tall = np.where((JDoneday >= JD_recent1[pidx]+JD_err1[pidx]) & \
-                       (JDoneday <= JD_recent2[pidx]+JD_err2[pidx]))[0]
-            tdur = np.where((JDoneday >= JD_recent1[pidx]) & \
-                       (JDoneday <= JD_recent2[pidx]))[0]
-            # check the timing of altitude > 30 deg 
-            if np.min(starAlt[tdur]) < 25: continue
-            
-            # mid-transit time 
+                StarAltAzi(JDoneday, self.lam, self.chi, starRA, starDec)
+            tall = np.where((JDoneday >= JD_recent1[pidx] + JD_err1[pidx]) &
+                            (JDoneday <= JD_recent2[pidx] + JD_err2[pidx]))[0]
+            tdur = np.where((JDoneday >= JD_recent1[pidx]) &
+                            (JDoneday <= JD_recent2[pidx]))[0]
+            # check the timing of altitude > 30 deg
+            if np.min(starAlt[tdur]) < 25:
+                continue
+
+            # mid-transit time
             tcen = int(tdur.mean())
             # define unique color of each planet
             pcolor = self.colors[pidx % len(self.colors)]
-            ppen2 = pg.mkPen(pcolor+[150,], width=2)
-            ppen15 = pg.mkPen(pcolor+[150,], width=15)
-            pf = QFont('Verdana', 9)
-            pf_small = QFont('Verdana', 7)
-            # draw line and transit time and labels 
-            mg.plot([lday[0], lday[-1]], [y2, y2], pen=ppen2)
+            # draw line and transit time and labels
+            ax2.plot(lday, lyy + y2, '-', color=pcolor, lw=2, alpha=0.5)
+            ax2.text(sunsetLST - (sunriseLST - sunsetLST + 2) * 0.25, y2,
+                     pname[pidx], color=pcolor, fontsize=12, )
+            ax2.text(sunsetLST - (sunriseLST - sunsetLST + 2) * 0.27, y2 + 4,
+                     '%5.2f' % (sVs[pidx],), color=pcolor, fontsize=10)
+            ax2.text(sunriseLST + (sunriseLST - sunsetLST + 2) * 0.08, y2,
+                     '%5.2f%%' % (pdepth[pidx] * 100,), color=pcolor, fontsize=10)
             # draw the transit timing including the errors of pericenter, period
-            mg.plot(lday[tall], lyy[tall] + y2, pen=ppen15)
+            ax2.plot(lday[tall], lyy[tall] + y2, color=pcolor, lw=7, alpha=0.5)
 
-            t1 = pg.TextItem(pname[pidx], color=pcolor)
-            t1.setFont(pf)
-            t1.setPos(sunsetLST-(sunriseLST-sunsetLST+26)*0.27, y2+4)
-
-            mg.addItem(t1)
-            '''
-            mg.text('%5.2f' % (sVs[pidx],), anchor=(sunsetLST-(sunriseLST-sunsetLST+26)*0.27, y2+4),
-                     color=pcolor, font=pf_small)
-            mg.text('%5.2f%%' % (pdepth[pidx]*100,), anchor=(sunriseLST+24+(sunriseLST-sunsetLST+26)*0.08, y2),
-                     color=pcolor, font=pf_small)
-            '''
-            # add ttick position 
-            ytickv.append(y2+3)
-
-            # draw the duration-based transit timing 
+            # draw the duration-based transit timing
             oalt = np.where(starAlt > 0)[0]
-            #pys = np.r_[lyy[oalt]+y2+starAlt[oalt]/9, lyy[oalt[::-1]]+y2]
-            #pxs = np.r_[lday[oalt], lday[oalt[::-1]]]
-            pxs = lday[oalt]
-            pys = y2 + starAlt[oalt]/9
-            mg.plot(pxs, pys, fillLevel=y2, brush=pcolor+[80,])
-            '''
-            xypair = list(zip(pxs,pys))
-            #p = Polygon(xypair,closed=True,fill=True,color=pcolor,alpha=0.2)
+            pys = np.array(list(lyy[oalt] + y2 + starAlt[oalt] / 9)+list(lyy[oalt[::-1]] + y2))
+            pxs = np.array(list(lday[oalt]) + list(lday[oalt[::-1]]))
+            xypair = list(zip(pxs, pys))
+            p = Polygon(xypair, closed=True, fill=True, color=pcolor, alpha=0.2)
             ax2.add_patch(p)
-            # draw the mid-transit 
-            ax2.plot(lday[tcen],lyy[tcen]+y2, 'o', color=pcolor, ms=12, alpha=0.5)
-            print (pname[pidx], int(starAlt[tcen]), sVs[pidx])
-            '''
-            # to the next row 
+            # draw the mid-transit
+            ax2.plot(lday[tcen], lyy[tcen] + y2, 'o', color=pcolor, ms=12, alpha=0.5)
+            # add y-tick position
+            ytickvalues.append(y2 + 3)
+            # to the next row
             y2 = y2 + 10
-            
-        # check the available stars 
+            # print results
+            print(pname[pidx], int(starAlt[tcen]), sVs[pidx])
+
+        # check the available stars
         if y2 == 5:
-            mg.text('No Available Targets')
+            ax2.text(0.5, 0.3, 'No Available Targets',
+                     fontsize=25, alpha=0.6, transform=ax2.transAxes)
+            f2.canvas.draw()
             return
-        mg.plot([sunsetLST, sunsetLST+18/15],[y2+10, y2+10],
-                fillLevel=0, brush=[0, 0, 0, 20])
-        mg.plot([sunriseLST+24, sunriseLST + 24 + 18 / 15], [y2 + 10, y2 + 10],
-                fillLevel=0, brush=[0, 0, 0, 20])
-        '''
-        mg.plot([sunsetLST, sunsetLST], [0, y2 + 10])
-        mg.plot([sunsetLST + 18 / 15., sunsetLST + 18 / 15.], [0, y2 + 10])
-        mg.plot([sunriseLST+ 24 , sunriseLST+ 24], [0, y2 + 10])
-        mg.plot([sunriseLST + 24 + 18 / 15., sunriseLST + 24 + 18 / 15.], [0, y2 + 10])
-        '''
-        xticks = [(k, '%02i' % (k % 24)) for k in range(12,36)]
-        mg.getAxis('bottom').setTicks([xticks])
-        mg.getAxis('left').setTicks([])
-        mg.getPlotItem().showGrid(alpha=0.5)
-        mg.setXRange(12, 36)
-        mg.setYRange(0, y2)
+
+        # draw the sunset/rise line in plot
+        ax2.plot([sunsetLST, sunsetLST], [0, y2 + 10], 'k-', lw=1)
+        ax2.text(sunsetLST - 0.27, (y2 + 10) * 0.1, 'Sunset', rotation='vertical', fontsize=12)
+        ax2.plot([sunsetLST + 18 / 15., sunsetLST + 18 / 15.], [0, y2 + 10], 'k-', lw=1)
+        ax2.text(sunsetLST - 0.27 + 18 / 15., (y2 + 10) * 0.1, 'Evening Astronomical Twilight',
+                 rotation='vertical', fontsize=12)
+        ax2.plot([sunriseLST - 18 / 15., sunriseLST - 18 / 15.], [0, y2 + 10], 'k-', lw=1)
+        ax2.text(sunriseLST + 0.1 - 18 / 15., (y2 + 10) * 0.1, 'Morning Astronomical Twilight',
+                 rotation='vertical', fontsize=12)
+        ax2.plot([sunriseLST, sunriseLST], [0, y2 + 10], 'k-', lw=1)
+        ax2.text(sunriseLST + 0.1, (y2 + 10) * 0.1, 'Sunrise', rotation='vertical', fontsize=12)
+
+        # draw the title
+        # ax2.text(0.04,0.92,'DATE: %s %02d %04d' % (month, dd, yy),fontsize=34,transform=f2.transFigure)
+        # ax2.text(0.97,0.94,'SITE: %s' % (self.obs,),fontsize=30,ha='right',transform=f2.transFigure)
+        # ax2.text(0.97,0.88,'LON =%7.2f , LAT =%6.2f' % (self.lam,self.chi),ha='right',fontsize=24,transform=f2.transFigure)
+        ax2.set_xlim([sunsetLST - 1, sunriseLST + 1])
+        ax2.set_ylim([0, y2])
+        ax2.set_xlabel('Local Standard Time [h]', fontsize=20)
+
+        xtickvalues = np.arange(sunsetLST-1, sunriseLST+1, 1)
+        xticklabels = []
+        for v in xtickvalues:
+            xticklabels.append('%02d' % (v % 24,))
+        ax2.set_xticks(xtickvalues)
+        ax2.set_xticklabels(xticklabels)
+
+        # read and redraw the x-labels
+        ax2.set_yticks(ytickvalues)
+        ax2.set_yticklabels([''])
+        ax2.grid()
+        f2.canvas.draw()
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
@@ -314,4 +327,3 @@ if __name__ == "__main__":
     view = TransitSearch()
     view.show()
     sys.exit(app.exec_())
-
