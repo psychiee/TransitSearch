@@ -1,9 +1,30 @@
 import numpy as np
 from glob import glob
-import urllib
+from urllib.request import urlopen
 import json 
 
 dtor = np.pi/180.0000
+
+def read_params():
+    f = open('ts.par', 'r')
+    par = {}
+    for line in f:
+        tmps = line.split('#')[0].split()
+        if len(tmps) < 1: continue
+        keyword = tmps[0]
+        contents = ''.join(tmps[1:])
+        par.update({keyword:contents})
+    return par
+
+def readData(db_name):
+    if db_name == 'ecl':
+        return readData1()
+    elif db_name == 'eod':
+        return readData4()
+    elif db_name == 'oec':
+        return readData3()
+    else:
+        return readData2()
 
 def readData1():
     '''
@@ -25,7 +46,7 @@ def readData1():
         'period_unc': ephemeris period uncertainty
         'current_oc_min': deviation from the ephemeris based on the current observations 
     '''
-    jdic = json.loads(urllib.request.urlopen('https://www.exoclock.space/database/planets_json').read()) 
+    jdic = json.loads(urlopen('https://www.exoclock.space/database/planets_json').read())
     pname, pper, pperupper, pperlower, \
     ptt, pttupper, pttlower, pt14, pt14upper, pt14lower, \
     pdepth, sRAs, sDECs, sVs = [], [], [], [], [], [], [], [], [], [], [], [], [], []

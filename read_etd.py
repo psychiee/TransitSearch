@@ -55,8 +55,7 @@ for i, x in enumerate(tlist[:]):
             mag = float(dat[9])
             dep = float(dat[10])
             dur = float(dat[11])
-    fstr = '%20s %12.8f %16.8f %8.3f %8.3f %8.3f %12.6f %+12.6f %s %s' % \
-           (fname,period,mjd,dur,dep,mag,ra,dec,ra_str,dec_str) 
+    fstr = f'{fname:20s} {period:12.8f} {mjd:16.8f} {dur:8.3f} {dep:8.3f} {mag:8.3f} {ra:12.6f} {dec:+12.6f} {ra_str} {dec_str}'
     print(fstr)
     fdat.write(fstr+'\n')
     # for i, ss in enumerate(ptree.xpath('//a/@href')):

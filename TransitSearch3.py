@@ -22,22 +22,23 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
 import time 
 from tslib import *
+import os
 
-#path, readData ='./plots_etd/', readData2
-#path, readData ='./plots_oec/', readData3
-#path, readData ='./plots_eod/', readData4
-path, readData ='./plots_ecl/', readData1
+par = read_params()
+PATH = par['PATH']
+try:
+    os.mkdir(PATH)
+    print(f'{PATH} created.')
+except:
+    print(f'{PATH} already exists.')
+DB_NAME = par['DB']
+OBSNUM = int(par['OBSNUM'])
+lambda_D, lambda_M, lambda_S = np.array(par['LON'].split(','), float)
+chi_D, chi_M, chi_S = np.array(par['LAT'].split(','), float)
+USER_TZ = int(par['TIMEZONE'])
 
 # 2006/08/28 Kang Wonseok (multi_file mode)
 with open('targetdate.txt','r') as f:
-    obsid = int(f.readline().split()[0])
-    epoch = float(f.readline().split()[0])
-    if obsid == 0:
-        chid, chim, chis = f.readline().split()
-        lambdad, lambdam, lambdas = f.readline().split()
-    else:
-        f.readline()
-        f.readline()
     #name,hh,rmin,rsec,deg,dmin
     iyy, imm, idd = [], [], [] 
     for line in f:
@@ -68,20 +69,17 @@ gmtdb = odat['gmtdb']
 
 monthdb=['Jan.','Feb.','Mar.','Apr.','May','Jun.','Jul.','Aug.','Sep.','Oct.','Nov.','Dec.']
 
-if obsid == 0:
-    chi= chid+chim/60.+chis/3600. # Latitude of Observation
-    lam=abs(lambdad)+abs(lambdam)/60.+abs(lambdas)/3600. # Longitude of Observation
-    if (lambdad < 0) | (lambdam < 0) | (lambdas < 0): lam=-lam
-    #obs='LAT.='+'%3d' % (chid,)+'d '+'%2d' % (chim,)+'m '+ \
-    #    '%2d' % (chis,)+'s   LONG.='+'%4d' % (lambdad,)+'d '+ \
-    #    '%2d' % (lambdam,)+'m '+'%2d' % (lambdas,)+'s'
+if OBSNUM == 0:
+    chi= chi_D+chi_M/60.+chi_S/3600. # Latitude of Observation
+    lam=abs(lambda_D)+abs(lambda_M)/60.+abs(lambda_S)/3600. # Longitude of Observation
+    if (lambda_D < 0) | (lambda_M < 0) | (lambda_S < 0): lam = -lam
     obs = 'Other Site'
-    timezone=int(lam/15)+1 # Time difference between Local Standard Time and Universal Time
+    timezone=USER_TZ
 else:
-    chi=chidb[obsid-1]
-    lam=lambdadb[obsid-1]
-    obs=str.strip(obsdb[obsid-1]) # Observatory Name
-    timezone = gmtdb[obsid-1]
+    chi=chidb[OBSNUM-1]
+    lam=lambdadb[OBSNUM-1]
+    obs=str.strip(obsdb[OBSNUM-1]) # Observatory Name
+    timezone = gmtdb[OBSNUM-1]
 
 if (lam < 0): lam=360+lam
 
@@ -99,7 +97,7 @@ colors = \
  u'cadetblue', u'purple', u'darkorange', u'blueviolet']
 
 # read transit data ==================================================================
-params = readData()
+params = readData(DB_NAME)
 pname = params[0]
 pper = params[1]
 pperlower = params[2]
@@ -147,11 +145,10 @@ for yy, mm, dd in zip(iyy, imm, idd):
     sunsetjd = min(JDoneday[nosun])
     sunrisejd = max(JDoneday[nosun])    
     
-    print (f"[ {yy:04d} {mm:02d} {dd:02d} ]")
-    print (f"   JD = {JD}, TIMEZONE = {timezone}")
-    print (f"   SUNRA = {rasun}, SUNDEC = {decsun}")
-    print (f"   SUNSet = {sunsetLST}, SUNRise = {sunriseLST}")
-
+    print(f"[ {yy:04d} {mm:02d} {dd:02d} ]")
+    print(f"   JD = {JD}, TIMEZONE = {timezone}")
+    print(f"   SUNRA = {rasun}, SUNDEC = {decsun}")
+    print(f"   SUNSet = {sunsetLST}, SUNRise = {sunriseLST}")
 
     # CHECK AVAILABLE TRANSITS ======================================================
     dJD = sunrisejd - sunsetjd 
@@ -164,13 +161,9 @@ for yy, mm, dd in zip(iyy, imm, idd):
     JD_err1 = N_revol * pperlower
     JD_err2 = N_revol * pperupper
     
-    oklist = np.where((JD_recent1 > sunsetjd) & \
-                      (JD_recent2 < sunrisejd) & \
-                      (pdepth > 0.004) & \
-                      (sVs < 20))[0]
+    oklist = np.where((JD_recent1 > sunsetjd) & (JD_recent2 < sunrisejd) &
+                      (pdepth > 0.004) & (sVs < 20))[0]
 
-    
-    
     # draw two figure frames 
     f2 = plt.figure(2,figsize=(18,12))
     ax2 = f2.add_axes([0.2,0.1,0.70,0.75])
@@ -273,7 +266,7 @@ for yy, mm, dd in zip(iyy, imm, idd):
     ax2.set_yticks(ytickv)
     ax2.set_yticklabels(['' for x in ytickv])
     ax2.grid(which='both')    
-    f2.savefig(path+targetlist_name+'_2.png')
+    f2.savefig(PATH+targetlist_name+'_2.png')
     plt.close('all')
 
 

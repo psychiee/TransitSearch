@@ -25,15 +25,9 @@ import matplotlib.backends.backend_tkagg as tkagg
 from tkinter import *
 from tslib import *
 
-#path, readData ='./plots_etd/', readData2
-
-#path, readData ='./plots_oec/', readData3
-
-#path, readData ='./plots_eod/', readData4
-
-path, readData = './plots_ecl', readData1
-
 data = 1000
+par = read_params()
+DB_NAME = par['DB']
 
 class TransitSearch(Frame):
     
@@ -63,7 +57,7 @@ class TransitSearch(Frame):
          u'cadetblue', u'purple', u'darkorange', u'blueviolet']
         
         # read transit database 
-        self.params = readData()
+        self.params = readData(DB_NAME)
         
         #GUI design
         Frame.__init__(self, master)
@@ -79,22 +73,23 @@ class TransitSearch(Frame):
         w.config(font='Verdana 12 bold')
         self.OptObs.set(self.obslist[1])
         
-        self.lon, self.lat = StringVar(), StringVar()
+        self.lon, self.lat, self.tz = StringVar(), StringVar(), StringVar()
         Label(f0,font='Verdana 12', text='Longitude').grid(row=1, column=2)
         Entry(f0,width=10, font='Verdana 12', textvariable=self.lon).grid(row=1, column=3)
         Label(f0,font='Verdana 12', text='Latitude').grid(row=1, column=4)
         Entry(f0,width=10, font='Verdana 12', textvariable=self.lat).grid(row=1, column=5)
+        Label(f0, font='Verdana 12', text='TimeZone').grid(row=1, column=6)
+        Entry(f0, width=3, font='Verdana 12', textvariable=self.tz).grid(row=1, column=7)
 
         ptime = time.localtime()
         self.OptDate = StringVar()
         self.OptDate.set('%4d/%02d/%02d' % (ptime[0],ptime[1],ptime[2]))
 
-        Label(f0, font='Verdana 12', text='Date').grid(row=1, column=6)
+        Label(f0, font='Verdana 12', text='Date').grid(row=1, column=8)
         en = Entry(f0, width=10, font='Verdana 14 bold', textvariable=self.OptDate)
-        en.grid(row=1,column=7, sticky=W,padx=5,pady=5)
+        en.grid(row=1,column=9, sticky=W,padx=5,pady=5)
         en.bind('<Return>', self.DrawEnter)
-        #Frame(f0).grid(row=1, column=8)
-        Button(f0, text="Draw", font='Verdana 12 bold', width=15, command=self.Draw).grid(row=1,column=9,sticky=E,padx=5,pady=5)
+        Button(f0, text="Draw", font='Verdana 12 bold', width=15, command=self.Draw).grid(row=1,column=10,sticky=E,padx=5,pady=5)
         
         # embed the plot figure
         f2 = LabelFrame(master, text="Plot", padx=5, pady=5) 
@@ -118,12 +113,8 @@ class TransitSearch(Frame):
         if obsid == 0:
             self.chi= np.float64(self.lat.get()) # Latitude of Observation
             self.lam= np.float64(self.lon.get()) # Longitude of Observation
-            #if (lambdad < 0) | (lambdam < 0) | (lambdas < 0): self.lam=-self.lam
-            #self.obs='LAT.='+'%3d' % (chid,)+'d '+'%2d' % (chim,)+'m '+ \
-            #    '%2d' % (chis,)+'s   LONG.='+'%4d' % (lambdad,)+'d '+ \
-            #    '%2d' % (lambdam,)+'m '+'%2d' % (lambdas,)+'s'
             self.obs = 'LAT= %.2f LON=%.2f' % (self.chi, self.lam)
-            self.timezone=int(self.lam/15)+1 # Time difference between Local Standard Time and Universal Time
+            self.timezone=int(self.tz.get())
         else:
             self.chi=self.chidb[obsid-1]
             self.lat.set(self.chi)
@@ -131,6 +122,8 @@ class TransitSearch(Frame):
             self.lon.set(self.lam)
             self.obs=self.obsdb[obsid-1] # Observatory Name
             self.timezone = self.gmtdb[obsid-1]
+            self.tz.set(self.timezone)
+
         if (self.lam < 0): self.lam=360+self.lam     
         try:
             tmp = self.OptDate.get().split('/')  
@@ -167,11 +160,11 @@ class TransitSearch(Frame):
         nosun, = np.where((lday >= sunsetLST) & (lday <= sunriseLST+24.0))
         sunsetjd = min(JDoneday[nosun])
         sunrisejd = max(JDoneday[nosun])
-        print ("[ %04d %02d %02d ]" % (yy, mm, dd))
-        print ("   JD = ", JD, " at UT=0")
-        print ("   SUNRA=", rasun, " hr, SUNDEC=", decsun, " deg")
-        print ("   SUNRise=", sunriseLST, " SUNSet=", sunsetLST)
-        
+        print(f"[ {yy:04d} {mm:02d} {dd:02d} ]")
+        print(f"   JD = {JD}, TIMEZONE = {self.timezone}")
+        print(f"   SUNRA = {rasun}, SUNDEC = {decsun}")
+        print(f"   SUNSet = {sunsetLST}, SUNRise = {sunriseLST}")
+
         # REFORM TRANSIT DATA ======================================================
         pname = self.params[0]
         pper = self.params[1]
@@ -200,7 +193,8 @@ class TransitSearch(Frame):
         oklist = np.where((JD_recent2 < sunrisejd) & (JD_recent1 > sunsetjd) & \
                           (pdepth > 0.005) & (sVs < 20))[0]
 
-        # draw two figure frames 
+        # draw two figure frames
+        self.fig.clf()
         f2 = self.fig 
         ax2 = f2.add_axes([0.17,0.1,0.75,0.86])
         ax2.cla()

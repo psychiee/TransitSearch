@@ -1,0 +1,6 @@
+PATH     ./plot_etd/    # plotting path (SHOULD BE ended with delimiter such as /, \)
+DB       etd            # ecl: exoclock.space, eod: exoplanets.org, oec:openexoplanetcatalogue.com, etd:var2.astro.cz/ETD/
+OBSNUM   1              # observatory number in obsdb.dat file (0:[USER(below)], 1: DOAO, 2:Mt. Lemmon, ... )
+LON      -70, 44, 36    # longitude of observatory for the USER mode (OBS = 0)
+LAT      -30, 10, 12    # latitude of observatory for the USER mode (OBS = 0)
+TIMEZONE -4             # time zone of observatory for the USER mode (OBS = 0)
