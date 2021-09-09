@@ -2,4 +2,4 @@
 2000. ; Epoch of Source positions(2000. for J2000.0 or 1950. for B1950.0) 
 -30 10 12 ; Latitude of Observatory
 -70 44 36 ; Longtitude of Observatory
-*
+2030 1 1

@@ -23,7 +23,10 @@ from matplotlib.patches import Polygon
 import time 
 from tslib import *
 
-path ='./plots/'
+#path, readData ='./plots_etd/', readData2
+#path, readData ='./plots_oec/', readData3
+#path, readData ='./plots_eod/', readData4
+path, readData ='./plots_ecl/', readData1
 
 # 2006/08/28 Kang Wonseok (multi_file mode)
 with open('targetdate.txt','r') as f:
@@ -56,12 +59,12 @@ with open('targetdate.txt','r') as f:
             idd.append(tmp[2].strip())
 
 # Database of Observatory Location =============================================
-odat = np.genfromtxt('observatory.dat',dtype=None, \
+odat = np.genfromtxt('obsdb.dat',dtype='U50, f, f, f', \
        names=['obsdb','chidb','lambdadb','gmtdb'], delimiter=',') 
-obsdb = [str(x,'utf-8') for x in odat['obsdb']]
-chidb = [float(x) for x in odat['chidb']] #odat['chidb']
-lambdadb = [float(x) for x in odat['lambdadb']]#odat['lambdadb']
-gmtdb = [float(x) for x in odat['gmtdb']]#odat['gmtdb'] 
+obsdb = np.array(odat['obsdb'], dtype='unicode')
+chidb = odat['chidb']
+lambdadb = odat['lambdadb']
+gmtdb = odat['gmtdb']
 
 monthdb=['Jan.','Feb.','Mar.','Apr.','May','Jun.','Jul.','Aug.','Sep.','Oct.','Nov.','Dec.']
 
@@ -96,7 +99,7 @@ colors = \
  u'cadetblue', u'purple', u'darkorange', u'blueviolet']
 
 # read transit data ==================================================================
-params = readData2()
+params = readData()
 pname = params[0]
 pper = params[1]
 pperlower = params[2]
@@ -113,12 +116,12 @@ pnum = len(pname)
 
 numdate = len(idd)
     
-data=1000 #; Number of Data points
+data=1500 #; Number of Data points
     
 for yy, mm, dd in zip(iyy, imm, idd):
     yy, mm, dd = int(yy), int(mm), int(dd) 
     
-    targetlist_name = '%04d%02d%02d' % (yy,mm,dd)
+    targetlist_name = f'{yy:04d}{mm:02d}{dd:02d}'
     month=monthdb[mm-1]  # Month
     
     lday=np.arange(data, dtype=np.float64)/data*24.+12. #; Local Standard Time
@@ -144,10 +147,10 @@ for yy, mm, dd in zip(iyy, imm, idd):
     sunsetjd = min(JDoneday[nosun])
     sunrisejd = max(JDoneday[nosun])    
     
-    print ("[ %04d %02d %02d ]" % (yy, mm, dd))
-    print ("   JD = ", JD, " TIMEZONE = ", timezone)
-    print ("   SUNRA=", rasun, " SUNDEC=", decsun)
-    print ("   SUNSet=", sunsetLST, " SUNRise=", sunriseLST)
+    print (f"[ {yy:04d} {mm:02d} {dd:02d} ]")
+    print (f"   JD = {JD}, TIMEZONE = {timezone}")
+    print (f"   SUNRA = {rasun}, SUNDEC = {decsun}")
+    print (f"   SUNSet = {sunsetLST}, SUNRise = {sunriseLST}")
 
 
     # CHECK AVAILABLE TRANSITS ======================================================
@@ -169,7 +172,7 @@ for yy, mm, dd in zip(iyy, imm, idd):
     
     
     # draw two figure frames 
-    f2 = plt.figure(2,figsize=(15,12))
+    f2 = plt.figure(2,figsize=(18,12))
     ax2 = f2.add_axes([0.2,0.1,0.70,0.75])
     # set of vertical plot position of transit timing 
     y2 = 5
@@ -186,7 +189,8 @@ for yy, mm, dd in zip(iyy, imm, idd):
                       (JDoneday <= JD_recent2[pidx]+JD_err2[pidx]))[0]
         tdur = np.where((JDoneday >= JD_recent1[pidx]) & \
                         (JDoneday <= JD_recent2[pidx]))[0]
-        # check the timing of altitude > 30 deg 
+        # check the timing of altitude > 30 deg
+        if len(tdur) == 0: continue
         if np.min(starAlt[tdur]) < 25: continue
 
         # mid-transit time 
@@ -198,19 +202,21 @@ for yy, mm, dd in zip(iyy, imm, idd):
         ax2.text(sunsetLST-(sunriseLST-sunsetLST+26)*0.3,y2, \
                  pname[pidx],color=pcolor, fontsize=16, )
         ax2.text(sunsetLST-(sunriseLST-sunsetLST+26)*0.34,y2+4, \
-                 '%5.2f' % (sVs[pidx],),color=pcolor, fontsize=12)
+                 f'{sVs[pidx]:5.2f}', color=pcolor, fontsize=12)
         ax2.text(sunriseLST+24+(sunriseLST-sunsetLST+26)*0.1,y2, \
-                 '%5.1f%%' % (pdepth[pidx]*100,), color=pcolor, fontsize=14)
+                 f'{pdepth[pidx]*100:5.1f}%', color=pcolor, fontsize=14)
         # add ttick position 
         ytickv.append(y2+3)
         # draw the transit timing including the errors of pericenter, period
-        ax2.plot(lday[tall],lyy[tall]+y2, color=pcolor, lw=12, alpha=0.5)
+        ax2.plot(lday[tall],lyy[tall]+y2, color=pcolor, lw=5, alpha=0.5)
+        
+        ax2.plot(lday[tdur],lyy[tdur]+y2, color=pcolor, lw=12, alpha=0.5)
         # mark JD start and end time 
-        ax2.text(lday[tall[0]]-0.5,lyy[tall[0]]+y2, \
-                 '%.2f' % (JD_recent1[pidx]-JD12,), \
+        ax2.text(lday[tdur[0]]-0.5,lyy[tdur[0]]+y2, \
+                 f'{JD_recent1[pidx]-JD12:.2f}', \
                  rotation='vertical', color=pcolor, fontsize=12 )
-        ax2.text(lday[tall[-1]]+0.25,lyy[tall[-1]]+y2, \
-                 '%.2f' % (JD_recent2[pidx]-JD12,), \
+        ax2.text(lday[tdur[-1]]+0.25,lyy[tdur[-1]]+y2, \
+                 f'{JD_recent2[pidx]-JD12:.2f}', \
                  rotation='vertical', color=pcolor, fontsize=12 )
         
         # draw the duration-based transit timing 
@@ -245,9 +251,14 @@ for yy, mm, dd in zip(iyy, imm, idd):
     ax2.text(sunriseLST+24+0.1,(y2+10)*0.1,'Sunrise', rotation='vertical', fontsize=15)
 
     # draw the title     
-    ax2.text(0.04,0.92,'DATE: %s %02d %04d' % (month, dd, yy),fontsize=34,transform=f2.transFigure)
-    ax2.text(0.97,0.94,'SITE: %s' % (obs,),fontsize=30,ha='right',transform=f2.transFigure) 
-    ax2.text(0.97,0.88,'LON =%7.2f , LAT =%6.2f' % (lam,chi),ha='right',fontsize=24,transform=f2.transFigure)
+    ax2.text(0.04,0.92, f'DATE: {month} {dd:02d}, {yy:04d}', 
+             fontsize=34,transform=f2.transFigure)
+    ax2.text(0.97,0.94, f'SITE: {obs}',
+             fontsize=30,ha='right',
+             transform=f2.transFigure) 
+    ax2.text(0.97,0.88, f'LON = {lam:7.2f}, LAT = {chi:+6.2f}',
+             fontsize=24,ha='right',
+             transform=f2.transFigure)
     ax2.set_xlim([sunsetLST-1,sunriseLST+25])
     ax2.set_ylim([0, y2])
     ax2.set_xlabel('Local Standard Time [h]', fontsize=20)
@@ -257,13 +268,10 @@ for yy, mm, dd in zip(iyy, imm, idd):
     f2.canvas.draw()
     labels = [item.get_text() for item in ax2.get_xticklabels()]
     for i, x in enumerate(labels):
-        try: 
-            x = int(x)
-            if x > 24: labels[i] = '%02d' % (x-24,)
-        except: pass          
+        labels[i] = f'{int(x) % 24:02d}'
     ax2.set_xticklabels(labels, fontsize=20) 
     ax2.set_yticks(ytickv)
-    ax2.set_yticklabels([''])
+    ax2.set_yticklabels(['' for x in ytickv])
     ax2.grid(which='both')    
     f2.savefig(path+targetlist_name+'_2.png')
     plt.close('all')

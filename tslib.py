@@ -1,50 +1,78 @@
 import numpy as np
 from glob import glob
+import urllib
+import json 
 
 dtor = np.pi/180.0000
 
 def readData1():
     '''
-    READ TRANSIT DATA from databases
-        0 pname = params
-        1,2,3 pper = params
-        4,5,6 ptt = params
-        7,8,9 pt14 = params
-        10 pdepth = params
-        11,12 sRAs = params sDECs = params
-        13 sVs = params
+    READ data from exoclock.space
+        'name': planet name
+        'priority': alert, high, medium or low
+        'total_observations': total number of observations on exoclock
+        'recent_observations': number of recent observations on exoclock (last 6 months)
+        'ra_j2000': star RA
+        'dec_j2000': star DEC
+        'v_mag': star Vmag
+        'r_mag': star Rmag
+        'gaia_g_mag': star Gmag
+        'depth_mmag': transit depth in millimag
+        'duration_hours': transit duration in hours
+        't0_bjd_tdb': ephemeris mid_time in BJD_TDB
+        't0_unc': ephemeris mid_time uncertainty
+        'period_days': ephemeris period in days
+        'period_unc': ephemeris period uncertainty
+        'current_oc_min': deviation from the ephemeris based on the current observations 
     '''
-    flist = glob('exoplanets.*.csv')
-    flist.sort()
-
-    dat = np.genfromtxt(flist[-1], names=True, dtype=None, delimiter=',')
-    dat = dat[1:]  # skip header
-    vv = np.where((dat['PER'] > 0) & (dat['T14'] > 0) & (dat['TT'] > 0))[0]
-    dat = dat[vv]  # check valid data
-
-    pname = dat['NAME']
-    pper = np.array(dat['PER'], np.float64)
-    ptt = np.array(dat['TT'], np.float64)
-    pt14 = np.array(dat['T14'], np.float64)
-    pperupper, pperlower = dat['PERUPPER'], dat['PERLOWER']
-    pttupper, pttlower = dat['TTUPPER'], dat['TTLOWER']
-    pt14upper, pt14lower = dat['T14UPPER'], dat['T14LOWER']
-    sVs, pdepth = dat['DEPTH'], dat['V']
-    sRAs, sDECs = 15.0 * dat['RA'], dat['DEC']
+    jdic = json.loads(urllib.request.urlopen('https://www.exoclock.space/database/planets_json').read()) 
+    pname, pper, pperupper, pperlower, \
+    ptt, pttupper, pttlower, pt14, pt14upper, pt14lower, \
+    pdepth, sRAs, sDECs, sVs = [], [], [], [], [], [], [], [], [], [], [], [], [], []
+    for name in jdic:
+        pname.append(jdic[name]['name'][:-1]+'_'+jdic[name]['name'][-1])
+        pper.append(jdic[name]['period_days'])
+        pperupper.append(jdic[name]['period_unc'])
+        pperlower.append(jdic[name]['period_unc'])
+        ptt.append(jdic[name]['t0_bjd_tdb'])
+        pttupper.append(jdic[name]['t0_unc'])
+        pttlower.append(jdic[name]['t0_unc'])
+        pt14.append(jdic[name]['duration_hours']/24)
+        pt14upper.append(0)
+        pt14lower.append(0)
+        pdepth.append(jdic[name]['depth_mmag']/1000)
+        sra = jdic[name]['ra_j2000'].split(':')
+        dra = 15*(float(sra[0])+float(sra[1])/60+float(sra[2])/3600)
+        sRAs.append(dra)
+        sdec = jdic[name]['dec_j2000'].split(':')
+        ddec = float(sdec[0][1:]) + float(sdec[1])/60 + float(sdec[2])/3600
+        if sdec[0][0] == '-': ddec = -ddec 
+        sDECs.append(ddec)
+        sVs.append(jdic[name]['v_mag'])
+    pname = np.array(pname)
+    pper = np.array(pper)
+    pperupper = np.array(pperupper)
+    pperlower = np.array(pperlower)
+    ptt = np.array(ptt)
+    pttupper = np.array(pttupper)
+    pttlower = np.array(pttlower)
+    pt14 = np.array(pt14)
+    pt14upper = np.array(pt14upper)
+    pt14lower = np.array(pt14lower)
+    pdepth = np.array(pdepth)
+    sRAs, sDECs, sVs = np.array(sRAs), np.array(sDECs), np.array(sVs)
 
     return pname, pper, pperupper, pperlower, \
            ptt, pttupper, pttlower, pt14, pt14upper, pt14lower, \
            pdepth, sRAs, sDECs, sVs
-
 
 def readData2():
     '''
 	Using database of ETD sites (http://var2.astro.cz/ETD/)
 
     '''
-    flist = glob('transit-*.dat')
+    flist = glob('etdlist-*.txt')
     flist.sort()
-
     dat1 = np.genfromtxt(flist[-1], usecols=(0,), dtype='U')
     dat2 = np.genfromtxt(flist[-1], usecols=(1, 2, 3, 4, 5, 6, 7))
 
@@ -67,7 +95,64 @@ def readData2():
            ptt, pttupper, pttlower, pt14, pt14upper, pt14lower, \
            pdepth, sRAs, sDECs, sVs
 
+def readData3():
+    '''
+	Using database of OEC sites (http://www.openexoplanetcatalogue.com/)
 
+    '''
+    flist = glob('oeclist-*.txt')
+    flist.sort()
+    dat1 = np.genfromtxt(flist[-1], usecols=(0,), dtype='U')
+    dat2 = np.genfromtxt(flist[-1], usecols=(1, 2, 3, 4, 5, 6, 7))
+
+    pname = dat1
+    pper, ptt, pt14 = dat2[:, 0], dat2[:, 1], dat2[:, 2] / (24 * 60.)
+    pdepth = dat2[:, 3]
+
+    pperupper = np.zeros_like(pper)
+    pperlower = np.zeros_like(pper)
+    pttupper = np.zeros_like(pper)
+    pttlower = np.zeros_like(pper)
+    pt14upper = np.zeros_like(pper)
+    pt14lower = np.zeros_like(pper)
+
+    sVs = dat2[:, 4]
+    sRAs = dat2[:, 5]
+    sDECs = dat2[:, 6]
+
+    return pname, pper, pperupper, pperlower, \
+           ptt, pttupper, pttlower, pt14, pt14upper, pt14lower, \
+           pdepth, sRAs, sDECs, sVs
+
+def readData4():
+    '''
+	Using database of EOD sites (http://exoplanets.org/)
+
+    '''
+    flist = glob('eodlist-*.txt')
+    flist.sort()
+    dat1 = np.genfromtxt(flist[-1], usecols=(0,), dtype='U')
+    dat2 = np.genfromtxt(flist[-1], usecols=(1,2,3,4,5,6,7,8,9))
+
+    pname = dat1
+    pper, ptt, pt14 = dat2[:, 0], dat2[:, 1], dat2[:, 2] / (24 * 60.)
+    pdepth = dat2[:, 3]
+
+    pperupper = dat2[:,7]
+    pperlower = dat2[:,8]
+    pttupper = np.zeros_like(pper)
+    pttlower = np.zeros_like(pper)
+    pt14upper = np.zeros_like(pper)
+    pt14lower = np.zeros_like(pper)
+
+    sVs = dat2[:, 4]
+    sRAs = dat2[:, 5]
+    sDECs = dat2[:, 6]
+
+    return pname, pper, pperupper, pperlower, \
+           ptt, pttupper, pttlower, pt14, pt14upper, pt14lower, \
+           pdepth, sRAs, sDECs, sVs
+           
 def SunRADec(jd):
     #  form time in Julian centuries from 1900.0
     t = (jd - 2415020.0) / 36525.0

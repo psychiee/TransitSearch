@@ -19,38 +19,36 @@
 ; plot transit target altitude
 '''
 import time
-from glob import glob
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
 import matplotlib.backends.backend_tkagg as tkagg
-import tkinter as tk
+from tkinter import *
 from tslib import *
+
+#path, readData ='./plots_etd/', readData2
+
+#path, readData ='./plots_oec/', readData3
+
+#path, readData ='./plots_eod/', readData4
+
+path, readData = './plots_ecl', readData1
 
 data = 1000
 
-class TransitSearch(tk.Frame):
+class TransitSearch(Frame):
     
     def __init__(self, master):
-        try:
-            odat = np.genfromtxt('observatory.dat', dtype=None,
-                   names=['obsdb','chidb','lambdadb','gmtdb'], delimiter=',')
-        except Exception as e:
-            emsg = 'Error in reading observatory DB file(observatory.dat) \n\n '
-            for i, z in enumerate(e.args):
-                emsg += '(%i) %s \n' % (i + 1, z)
-            tk.messagebox.showerror('Error', emsg)
-            raise
 
-
+       # Database of Observatory Location
+        odat = np.genfromtxt('obsdb.dat', dtype='U50, f, f, f', \
+               names=['obsdb','chidb','lambdadb','gmtdb'], delimiter=',') 
         self.obsdb = np.array(odat['obsdb'], dtype='unicode')
         self.chidb = odat['chidb']
         self.lambdadb = odat['lambdadb']
-        self.gmtdb = odat['gmtdb']
-
-        # define month name
-        self.monthdb = ['Jan.', 'Feb.', 'Mar.', 'Apr.', 'May', 'Jun.',
-                        'Jul.', 'Aug.', 'Sep.', 'Oct.', 'Nov.', 'Dec.']
-
+        self.gmtdb = odat['gmtdb'] 
+        
+        self.monthdb=['Jan.','Feb.','Mar.','Apr.','May','Jun.','Jul.','Aug.','Sep.','Oct.','Nov.','Dec.']
+        
         # define colors =====================================================================
         self.colors = \
         [u'indigo', u'firebrick', u'indianred', u'darkolivegreen', u'olive', u'tomato',
@@ -65,56 +63,49 @@ class TransitSearch(tk.Frame):
          u'cadetblue', u'purple', u'darkorange', u'blueviolet']
         
         # read transit database 
-        try:
-            self.params = readData2()
-        except Exception as e:
-            emsg = 'Error in reading transit DB file(transit-YYMMDD.dat)\n\n'
-            for i, z in enumerate(e.args):
-                emsg += '(%i) %s \n' % (i + 1, z)
-            tk.messagebox.showerror('Error', emsg)
-            raise
-
+        self.params = readData()
+        
         #GUI design
-        tk.Frame.__init__(self, master)
+        Frame.__init__(self, master)
         master.title("Transit Search 0.9")
         
-        f0 = tk.LabelFrame(master, text="Location", padx=5, pady=5)
+        f0 = LabelFrame(master, text="Location", padx=5, pady=5)
         # option menu - observatory list 
         self.obslist = ['Location'] + list(self.obsdb)
-        self.OptObs = tk.StringVar()
+        self.OptObs = StringVar()
 
-        w = tk.OptionMenu(f0, self.OptObs, *self.obslist)
-        w.grid(row=1,column=1,sticky=tk.W,padx=5,pady=5)
+        w = OptionMenu(f0, self.OptObs, *self.obslist)
+        w.grid(row=1,column=1,sticky=W,padx=5,pady=5)
         w.config(font='Verdana 12 bold')
         self.OptObs.set(self.obslist[1])
         
-        self.lon, self.lat = tk.StringVar(), tk.StringVar()
-        tk.Label(f0,font='Verdana 12', text='Longitude').grid(row=1, column=2)
-        tk.Entry(f0,width=10, font='Verdana 12', textvariable=self.lon).grid(row=1, column=3)
-        tk.Label(f0,font='Verdana 12', text='Latitude').grid(row=1, column=4)
-        tk.Entry(f0,width=10, font='Verdana 12', textvariable=self.lat).grid(row=1, column=5)
+        self.lon, self.lat = StringVar(), StringVar()
+        Label(f0,font='Verdana 12', text='Longitude').grid(row=1, column=2)
+        Entry(f0,width=10, font='Verdana 12', textvariable=self.lon).grid(row=1, column=3)
+        Label(f0,font='Verdana 12', text='Latitude').grid(row=1, column=4)
+        Entry(f0,width=10, font='Verdana 12', textvariable=self.lat).grid(row=1, column=5)
 
         ptime = time.localtime()
-        self.OptDate = tk.StringVar()
+        self.OptDate = StringVar()
         self.OptDate.set('%4d/%02d/%02d' % (ptime[0],ptime[1],ptime[2]))
 
-        tk.Label(f0, font='Verdana 12', text='Date').grid(row=1, column=6)
-        en = tk.Entry(f0, width=10, font='Verdana 14 bold', textvariable=self.OptDate)
-        en.grid(row=1,column=7, sticky=tk.W,padx=5,pady=5)
+        Label(f0, font='Verdana 12', text='Date').grid(row=1, column=6)
+        en = Entry(f0, width=10, font='Verdana 14 bold', textvariable=self.OptDate)
+        en.grid(row=1,column=7, sticky=W,padx=5,pady=5)
         en.bind('<Return>', self.DrawEnter)
         #Frame(f0).grid(row=1, column=8)
-        tk.Button(f0, text="Draw", font='Verdana 12 bold', width=15, command=self.Draw).grid(row=1,column=9,sticky=tk.E,padx=5,pady=5)
+        Button(f0, text="Draw", font='Verdana 12 bold', width=15, command=self.Draw).grid(row=1,column=9,sticky=E,padx=5,pady=5)
         
         # embed the plot figure
-        f2 = tk.LabelFrame(master, text="Plot", padx=5, pady=5)
-        self.fig = plt.figure(1,figsize=(10,8))
+        f2 = LabelFrame(master, text="Plot", padx=5, pady=5) 
+        self.fig = plt.figure(1,figsize=(12,8))
         self.fig.clf()
         self.canvas = tkagg.FigureCanvasTkAgg(self.fig, master=f2)
-        self.canvas.get_tk_widget().pack(fill=tk.BOTH)
+        self.canvas.get_tk_widget().pack(fill=BOTH)
         
         #implement GUI controls 
-        f0.pack(fill=tk.BOTH)
-        f2.pack(fill=tk.BOTH)
+        f0.pack(fill=BOTH)
+        f2.pack(fill=BOTH)
 
     def DrawEnter(self, event):
         self.Draw()
@@ -238,11 +229,11 @@ class TransitSearch(tk.Frame):
             pcolor = self.colors[pidx % len(self.colors)]
             # draw line and transit time and labels 
             ax2.plot(lday,lyy+y2, '-', color=pcolor, lw=2, alpha=0.5) 
-            ax2.text(sunsetLST-(sunriseLST-sunsetLST+26)*0.25, y2,
+            ax2.text(sunsetLST-(sunriseLST-sunsetLST+26)*0.25,y2, \
                      pname[pidx],color=pcolor, fontsize=12, )
-            ax2.text(sunsetLST-(sunriseLST-sunsetLST+26)*0.27, y2+4,
+            ax2.text(sunsetLST-(sunriseLST-sunsetLST+26)*0.27,y2+4, \
                      '%5.2f' % (sVs[pidx],),color=pcolor, fontsize=10)
-            ax2.text(sunriseLST+24+(sunriseLST-sunsetLST+26)*0.08, y2,
+            ax2.text(sunriseLST+24+(sunriseLST-sunsetLST+26)*0.08,y2, \
                      '%5.2f%%' % (pdepth[pidx]*100,), color=pcolor, fontsize=10)
             # add ttick position 
             ytickv.append(y2+3)
@@ -258,7 +249,8 @@ class TransitSearch(tk.Frame):
             p = Polygon(xypair,closed=True,fill=True,color=pcolor,alpha=0.2)
             ax2.add_patch(p)
             # draw the mid-transit 
-            ax2.plot(lday[tcen],lyy[tcen]+y2, 'o', color=pcolor, ms=12, alpha=0.5)
+            ax2.plot(lday[tcen],lyy[tcen]+y2, 'o', color=pcolor, \
+                     ms=12, alpha=0.5)
     
             print (pname[pidx], int(starAlt[tcen]), sVs[pidx])
             # to the next row 
@@ -267,7 +259,7 @@ class TransitSearch(tk.Frame):
         # check the available stars 
         if y2 == 5:
             #ax1.cla()
-            ax2.text(0.5, 0.3, 'No Available Targets',
+            ax2.text(0.5, 0.3, 'No Available Targets', \
                      fontsize=25, alpha=0.6, transform=ax2.transAxes)
             f2.canvas.draw() 
             return
@@ -276,10 +268,10 @@ class TransitSearch(tk.Frame):
         ax2.plot([sunsetLST,sunsetLST],[0,y2+10], 'k-', lw=1)
         ax2.text(sunsetLST-0.27,(y2+10)*0.1,'Sunset', rotation='vertical', fontsize=12)
         ax2.plot([sunsetLST+18/15.,sunsetLST+18/15.],[0,y2+10], 'k-', lw=1) 
-        ax2.text(sunsetLST-0.27+18/15.,(y2+10)*0.1, 'Evening Astronomical Twilight',
+        ax2.text(sunsetLST-0.27+18/15.,(y2+10)*0.1, 'Evening Astronomical Twilight',\
                  rotation='vertical', fontsize=12)
         ax2.plot([sunriseLST+24-18/15.,sunriseLST+24-18/15.],[0,y2+10], 'k-', lw=1) 
-        ax2.text(sunriseLST+24+0.1-18/15.,(y2+10)*0.1, 'Morning Astronomical Twilight',
+        ax2.text(sunriseLST+24+0.1-18/15.,(y2+10)*0.1, 'Morning Astronomical Twilight',\
                  rotation='vertical', fontsize=12)
         ax2.plot([sunriseLST+24,sunriseLST+24],[0,y2+10], 'k-', lw=1)
         ax2.text(sunriseLST+24+0.1,(y2+10)*0.1,'Sunrise', rotation='vertical', fontsize=12)
@@ -301,14 +293,14 @@ class TransitSearch(tk.Frame):
             except: pass          
         ax2.set_xticklabels(labels)
         ax2.set_yticks(ytickv)
-        ax2.set_yticklabels([''])
+        ax2.set_yticklabels(['' for x in ytickv])
         ax2.grid()
         f2.canvas.draw()        
 
     
 if __name__ == "__main__":
-
-    root = tk.Tk()
+    plt.close('all')
+    root = Tk()
     ap = TransitSearch(master=root)
     ap.mainloop()
 
